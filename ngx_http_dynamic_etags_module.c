@@ -172,40 +172,12 @@ static ngx_int_t ngx_http_dynamic_etags_body_filter(ngx_http_request_t *r, ngx_c
             r->headers_out.etag->value.data = etag;            
         }
 
-        /* look for If-None-Match in request headers */
-        ngx_uint_t      found=0;
-        ngx_list_part_t *part = NULL;
-        ngx_table_elt_t *header = NULL;
-        ngx_table_elt_t *if_none_match = NULL;
-        part = &r->headers_in.headers.part;
-        header = part->elts;
-        for ( i = 0 ; ; i++ ) {
-            if ( i >= part->nelts) {
-                if ( part->next == NULL ) {
-                        break;
-                }
-
-                part = part->next;
-                header = part->elts;
-                i = 0;
-            }
-
-            if ( ngx_strcmp(header[i].key.data, "If-None-Match") == 0 ) {
-                if_none_match = &header[i];
-                found = 1;
-                break;
-            }
-        }
-
-        if ( found ) {
-            if (if_match(r, if_none_match)) {
-
-                r->headers_out.status = NGX_HTTP_NOT_MODIFIED;
-                r->headers_out.status_line.len = 0;
-                r->headers_out.content_type.len = 0;
-                ngx_http_clear_content_length(r);
-                ngx_http_clear_accept_ranges(r);
-            }
+        if (r->headers_in.if_none_match && if_match(r, r->headers_in.if_none_match)) {
+            r->headers_out.status = NGX_HTTP_NOT_MODIFIED;
+            r->headers_out.status_line.len = 0;
+            r->headers_out.content_type.len = 0;
+            ngx_http_clear_content_length(r);
+            ngx_http_clear_accept_ranges(r);
         }
     }	
 
