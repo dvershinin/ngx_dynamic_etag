@@ -147,37 +147,36 @@ static ngx_int_t ngx_http_dynamic_etags_body_filter(ngx_http_request_t *r, ngx_c
     }
 	
     ngx_http_dynamic_etags_loc_conf_t *loc_conf;
-    loc_conf = ngx_http_get_module_loc_conf(r, ngx_http_dynamic_etags_module);
+    loc_conf = ngx_http_get_module_loc_conf(r, ngx_http_dynamic_etags_module); 
+            
     if (1 == loc_conf->enable) {
-        ngx_md5_init(&md5);
-        for (chain_link = in; chain_link; chain_link = chain_link->next) {
-            ngx_md5_update(&md5, chain_link->buf->pos,
-                chain_link->buf->last - chain_link->buf->pos);
-        }
-        ngx_md5_final(digest, &md5);
-
-        unsigned char* etag = ngx_pcalloc(r->pool, 34);
-        etag[0] = etag[33] = '"';
-        for ( i = 0 ; i < 16; i++ ) {
-            etag[2*i+1] = hex[digest[i] >> 4];
-            etag[2*i+2] = hex[digest[i] & 0xf];
-        }
-
         if(!r->headers_out.etag) {
-            r->headers_out.etag = ngx_list_push(&r->headers_out.headers);
-        }
+            ngx_md5_init(&md5);
+            for (chain_link = in; chain_link; chain_link = chain_link->next) {
+                ngx_md5_update(&md5, chain_link->buf->pos,
+                    chain_link->buf->last - chain_link->buf->pos);
+            }
+            ngx_md5_final(digest, &md5);
 
-        r->headers_out.etag->hash = 1;
-        r->headers_out.etag->key.len = sizeof("ETag") - 1;
-        r->headers_out.etag->key.data = (u_char *) "ETag";
-        r->headers_out.etag->value.len = 34;
-        r->headers_out.etag->value.data = etag;
+            unsigned char* etag = ngx_pcalloc(r->pool, 34);
+            etag[0] = etag[33] = '"';
+            for ( i = 0 ; i < 16; i++ ) {
+                etag[2*i+1] = hex[digest[i] >> 4];
+                etag[2*i+2] = hex[digest[i] & 0xf];
+            }
+            r->headers_out.etag = ngx_list_push(&r->headers_out.headers);
+            r->headers_out.etag->hash = 1;
+            r->headers_out.etag->key.len = sizeof("ETag") - 1;
+            r->headers_out.etag->key.data = (u_char *) "ETag";
+            r->headers_out.etag->value.len = 34;
+            r->headers_out.etag->value.data = etag;            
+        }
 
         /* look for If-None-Match in request headers */
         ngx_uint_t      found=0;
         ngx_list_part_t *part = NULL;
         ngx_table_elt_t *header = NULL;
-        ngx_table_elt_t *if_none_match;
+        ngx_table_elt_t *if_none_match = NULL;
         part = &r->headers_in.headers.part;
         header = part->elts;
         for ( i = 0 ; ; i++ ) {
