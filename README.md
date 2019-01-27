@@ -4,6 +4,19 @@ This NGINX module allows to empower your dynamic content with automatic [`ETag`]
 header. It allows client browser to issue conditional `GET` requests to 
 dynamic pages. And thus saves bandwidth and ensures better performance! 
 
+## Synopsis
+
+```
+http {
+    server {
+        location ~ \.php$ {
+            dynamic_etag on;
+            fastcgi_pass ...;
+        }
+    }
+}
+```
+
 ## Configuration directives
 
 ### `dynamic_etag`
