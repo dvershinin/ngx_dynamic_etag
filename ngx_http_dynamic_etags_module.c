@@ -107,9 +107,19 @@ static ngx_int_t ngx_http_dynamic_etags_init(ngx_conf_t *cf) {
 static ngx_int_t ngx_http_dynamic_etags_header_filter(ngx_http_request_t *r) {
 
     ngx_http_dynamic_etags_module_ctx_t       *ctx;
+    ngx_http_dynamic_etags_loc_conf_t         *cf;
+    
+    cf = ngx_http_get_module_loc_conf(r, ngx_http_dynamic_etags_module);
+    
+    if(!cf->enable
+        || r->headers_out.status != NGX_HTTP_OK
+        || r != r->main)
+    {
+        return ngx_http_next_header_filter(r);
+    }    
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_dynamic_etags_module);
-
+    
     if (ctx) {
         return ngx_http_next_header_filter(r);
     }
