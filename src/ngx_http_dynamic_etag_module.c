@@ -30,7 +30,6 @@ typedef struct {
 static ngx_http_output_header_filter_pt  ngx_http_next_header_filter;
 static ngx_http_output_body_filter_pt    ngx_http_next_body_filter;
 
-static ngx_uint_t if_match(ngx_http_request_t *r, ngx_table_elt_t *header);
 static void * ngx_http_dynamic_etag_create_loc_conf(ngx_conf_t *cf);
 static char * ngx_http_dynamic_etag_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child);
 static ngx_int_t ngx_http_dynamic_etag_init(ngx_conf_t *cf);
@@ -100,7 +99,7 @@ static void * ngx_http_dynamic_etag_create_loc_conf(ngx_conf_t *cf) {
      *     conf->types = { NULL };
      *     conf->types_keys = NULL;
      */
-    conf->enable   = NGX_CONF_UNSET_UINT;
+    conf->enable = NGX_CONF_UNSET_UINT;
     return conf;
 }
 
@@ -134,8 +133,9 @@ static ngx_int_t ngx_http_dynamic_etag_init(ngx_conf_t *cf) {
 static ngx_int_t ngx_http_dynamic_etag_header_filter(ngx_http_request_t *r) {
 
     ngx_http_dynamic_etag_module_ctx_t       *ctx;
+     
     ngx_http_dynamic_etag_loc_conf_t         *cf;
-    
+   
     cf = ngx_http_get_module_loc_conf(r, ngx_http_dynamic_etag_module);
     
     if(!cf->enable
@@ -159,11 +159,11 @@ static ngx_int_t ngx_http_dynamic_etag_header_filter(ngx_http_request_t *r) {
 
     ngx_http_set_ctx(r, ctx, ngx_http_dynamic_etag_module);
 
-    ngx_http_clear_content_length(r);
-    ngx_http_clear_accept_ranges(r);
-
     r->main_filter_need_in_memory = 1;
     r->filter_need_in_memory = 1;
+    
+    // Make sure that ngx_http_not_modified_filter_module does its stuff
+    r->disable_not_modified = 0;
 
     return NGX_OK;
 }
@@ -209,14 +209,6 @@ static ngx_int_t ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_ch
             r->headers_out.etag->value.len = 34;
             r->headers_out.etag->value.data = etag;            
         }
-
-        if (r->headers_in.if_none_match && if_match(r, r->headers_in.if_none_match)) {
-            r->headers_out.status = NGX_HTTP_NOT_MODIFIED;
-            r->headers_out.status_line.len = 0;
-            r->headers_out.content_type.len = 0;
-            ngx_http_clear_content_length(r);
-            ngx_http_clear_accept_ranges(r);
-        }
     }	
 
 
@@ -228,87 +220,4 @@ static ngx_int_t ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_ch
     ngx_http_set_ctx(r, NULL, ngx_http_dynamic_etag_module);
 
     return ngx_http_next_body_filter(r, in);
-}
-
-static ngx_uint_t if_match(ngx_http_request_t *r, ngx_table_elt_t *header)
-{
-    u_char     *start, *end, ch;
-    ngx_str_t   etag, *list;
-
-    list = &header->value;
-
-    if (list->len == 1 && list->data[0] == '*') {
-        return 1;
-    }
-
-    if (r->headers_out.etag == NULL) {
-        return 0;
-    }
-
-    etag = r->headers_out.etag->value;
-
-    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                   "http im:\"%V\" etag:%V", list, &etag);
-
-    if ( etag.len > 2
-        && etag.data[0] == 'W'
-        && etag.data[1] == '/')
-    {
-        etag.len -= 2;
-        etag.data += 2;
-    }
-
-    start = list->data;
-    end = list->data + list->len;
-
-    while (start < end) {
-
-        if ( end - start > 2
-            && start[0] == 'W'
-            && start[1] == '/')
-        {
-            start += 2;
-        }
-
-        if (etag.len > (size_t) (end - start)) {
-            return 0;
-        }
-
-        if (ngx_strncmp(start, etag.data, etag.len) != 0) {
-            goto skip;
-        }
-
-        start += etag.len;
-
-        while (start < end) {
-            ch = *start;
-
-            if (ch == ' ' || ch == '\t') {
-                start++;
-                continue;
-            }
-
-            break;
-        }
-
-        if (start == end || *start == ',') {
-            return 1;
-        }
-
-    skip:
-
-        while (start < end && *start != ',') { start++; }
-        while (start < end) {
-            ch = *start;
-
-            if (ch == ' ' || ch == '\t' || ch == ',') {
-                start++;
-                continue;
-            }
-
-            break;
-        }
-    }
-
-    return 0;
 }
