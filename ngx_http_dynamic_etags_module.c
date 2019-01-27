@@ -18,7 +18,9 @@
 #include <sys/stat.h>
 
 typedef struct {
-    ngx_flag_t  enable;
+    ngx_flag_t   enable;
+    ngx_hash_t   types;
+    ngx_array_t  *types_keys;
 } ngx_http_dynamic_etags_loc_conf_t;
 
 typedef struct {
@@ -36,14 +38,25 @@ static ngx_int_t ngx_http_dynamic_etags_header_filter(ngx_http_request_t *r);
 static ngx_int_t ngx_http_dynamic_etags_body_filter(ngx_http_request_t *r, ngx_chain_t *in);
 
 static ngx_command_t  ngx_http_dynamic_etags_commands[] = {
+    
     { ngx_string( "dynamic_etags" ),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG,
       ngx_conf_set_flag_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof( ngx_http_dynamic_etags_loc_conf_t, enable ),
       NULL },
+      
+     { ngx_string("dynamic_etags_types"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
+      ngx_http_types_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_dynamic_etags_loc_conf_t, types_keys),
+      &ngx_http_html_default_types[0] },     
+      
       ngx_null_command
 };
+
+
 
 static ngx_http_module_t  ngx_http_dynamic_etags_module_ctx = {
     NULL,                                   /* preconfiguration */
@@ -81,6 +94,12 @@ static void * ngx_http_dynamic_etags_create_loc_conf(ngx_conf_t *cf) {
     if ( NULL == conf ) {
         return NGX_CONF_ERROR;
     }
+    /*
+     * set by ngx_pcalloc():
+     *
+     *     conf->types = { NULL };
+     *     conf->types_keys = NULL;
+     */
     conf->enable   = NGX_CONF_UNSET_UINT;
     return conf;
 }
@@ -91,6 +110,14 @@ static char * ngx_http_dynamic_etags_merge_loc_conf(ngx_conf_t *cf, void *parent
 
     ngx_conf_merge_value( conf->enable, prev->enable, 0 );
 
+    if (ngx_http_merge_types(cf, &conf->types_keys, &conf->types,
+                             &prev->types_keys, &prev->types,
+                             ngx_http_html_default_types)
+        != NGX_OK)
+    {
+        return NGX_CONF_ERROR;
+    }
+    
     return NGX_CONF_OK;
 }
 
@@ -113,6 +140,7 @@ static ngx_int_t ngx_http_dynamic_etags_header_filter(ngx_http_request_t *r) {
     
     if(!cf->enable
         || r->headers_out.status != NGX_HTTP_OK
+        || ngx_http_test_content_type(r, &cf->types) == NULL    
         || r != r->main)
     {
         return ngx_http_next_header_filter(r);
