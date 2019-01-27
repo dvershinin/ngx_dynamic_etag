@@ -1,7 +1,7 @@
 # ngx_dynamic_etag
 
-This NGINX module allows to empower your dynamic content with automatic `ETag`
-header. This allows client browser to issue conditional `GET` requests to 
+This NGINX module allows to empower your dynamic content with automatic [`ETag`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag)
+header. It allows client browser to issue conditional `GET` requests to 
 dynamic pages. And thus saves bandwidth and ensures better performance! 
 
 ## Configuration directives
@@ -23,10 +23,6 @@ Enables or disables applying ETag automatically.
 Enables applying ETag automatically for the specified MIME types
 in addition to `text/html`. The special value `*` matches any MIME type.
 Responses with the `text/html` MIME type are always included.
-
-## TODOs
-
-* Look into implementing [If-Match](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag)
 
 ## Original author's README
 
