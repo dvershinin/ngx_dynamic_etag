@@ -7,6 +7,7 @@
  *
  *  Copyright 2008 Mike West ( http://mikewest.org/ )
  *  Copyright 2009 Adrian Jung ( http://me2day.net/kkung, kkungkkung@gmail.com ).
+ *  Copyright 2019 Danila Vershinin ( https://www.getpagespeed.com/, info@getpagespeed.com ).
  *
  *  The following is released under the Creative Commons BSD license,
  *  available for your perusal at `http://creativecommons.org/licenses/BSD/`

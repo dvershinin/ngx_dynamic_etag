@@ -1,7 +1,7 @@
 # ngx_dynamic_etag
 
-This NGINX module allows to empower your dynamic content with automatic [`ETag`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag)
-header. It allows client browser to issue conditional `GET` requests to 
+This NGINX module empowers your dynamic content with automatic [`ETag`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag)
+header. It allows client browsers to issue conditional `GET` requests to 
 dynamic pages. And thus saves bandwidth and ensures better performance! 
 
 ## Synopsis
@@ -43,7 +43,7 @@ Attempt at handling ETag / If-None-Match on proxied content.
 
 I plan on using this to front a Varnish server using a lot of ESI.
 
-It does kind of work, but... be aware, this is my first attempt at developping
+It does kind of work, but... be aware, this is my first attempt at developing
 a nginx plugin, and dealing with headers after having read the body was not
 exactly in the how-to.
 
