@@ -21,7 +21,7 @@ http {
 
 ### `dynamic_etag`
 
-- **syntax**: `dynamic_etag on|off`
+- **syntax**: `dynamic_etag on|off|$var`
 - **default**: `off`
 - **context**: `http`, `server`, `location`, `if`
 
@@ -36,6 +36,37 @@ Enables or disables applying ETag automatically.
 Enables applying ETag automatically for the specified MIME types
 in addition to `text/html`. The special value `*` matches any MIME type.
 Responses with the `text/html` MIME type are always included.
+
+## Installation for stable NGINX
+
+### RHEL/CentOS 6/7
+
+    yum install https://extras.getpagespeed.com/release-el$(rpm -E %{rhel})-latest.rpm
+    yum install nginx nginx-module-dynamic-etag
+
+Follow the installation prompt to import GPG public key that is used for verifying packages.
+
+Then add the following at the top of your `/etc/nginx/nginx.conf`:
+
+    load_module modules/ngx_http_dynamic_etag_module.so;
+
+## Tips
+
+You can use `map` directive for conditionally enabling dynamic `ETag` based on URLs, e.g.:
+
+    map $request_uri $dyn_etag {
+        default "off";
+        /foo "on";
+        /bar "on";
+    }
+    server { 
+       ...
+       location / {
+           dynamic_etag $dyn_etag;
+           fastcgi_pass ...
+       }
+    }       
+        
 
 ## Original author's README
 
