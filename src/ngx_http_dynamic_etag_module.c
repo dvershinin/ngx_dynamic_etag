@@ -1,25 +1,25 @@
-/* 
- *  Copyright (c) 2009 Mathieu Poumeyrol ( http://github.com/kali )
+/*
+ * Copyright (c) 2019 Danila Vershinin ( https://www.getpagespeed.com/ )
+ * Copyright (c) 2009 Mathieu Poumeyrol ( http://github.com/kali )
  *
- *  All rights reserved.
- *  All original code was written by Mike West ( http://mikewest.org/ ) and
-        Adrian Jung ( http://me2day.net/kkung, kkungkkung@gmail.com ).
+ * All rights reserved.
+ * All original code was written by Mike West ( http://mikewest.org/ ) and
+       Adrian Jung ( http://me2day.net/kkung, kkungkkung@gmail.com ).
  *
- *  Copyright 2008 Mike West ( http://mikewest.org/ )
- *  Copyright 2009 Adrian Jung ( http://me2day.net/kkung, kkungkkung@gmail.com ).
- *  Copyright 2019 Danila Vershinin ( https://www.getpagespeed.com/, info@getpagespeed.com ).
+ * Copyright 2008 Mike West ( http://mikewest.org/ )
+ * Copyright 2009 Adrian Jung ( http://me2day.net/kkung, kkungkkung@gmail.com ).
  *
- *  The following is released under the Creative Commons BSD license,
- *  available for your perusal at `http://creativecommons.org/licenses/BSD/`
+ * The following is released under the Creative Commons BSD license,
+ * available for your perusal at `http://creativecommons.org/licenses/BSD/`
  */
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
 #include <ngx_md5.h>
-#include <sys/stat.h>
 
 typedef struct {
-    ngx_flag_t   enable;
+    ngx_uint_t   enable;
+    ngx_http_complex_value_t enable_value;
     ngx_hash_t   types;
     ngx_array_t  *types_keys;
 } ngx_http_dynamic_etag_loc_conf_t;
@@ -31,19 +31,20 @@ typedef struct {
 static ngx_http_output_header_filter_pt  ngx_http_next_header_filter;
 static ngx_http_output_body_filter_pt    ngx_http_next_body_filter;
 
-static void * ngx_http_dynamic_etag_create_loc_conf(ngx_conf_t *cf);
-static char * ngx_http_dynamic_etag_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child);
+static void *ngx_http_dynamic_etag_create_loc_conf(ngx_conf_t *cf);
+static char *ngx_http_dynamic_etag_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child);
 static ngx_int_t ngx_http_dynamic_etag_init(ngx_conf_t *cf);
 static ngx_int_t ngx_http_dynamic_etag_header_filter(ngx_http_request_t *r);
 static ngx_int_t ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in);
+static char *ngx_http_dynamic_etag_enable(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 
 static ngx_command_t  ngx_http_dynamic_etag_commands[] = {
     
     { ngx_string( "dynamic_etag" ),
-      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG,
-      ngx_conf_set_flag_slot,
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_http_dynamic_etag_enable,
       NGX_HTTP_LOC_CONF_OFFSET,
-      offsetof( ngx_http_dynamic_etag_loc_conf_t, enable ),
+      0,
       NULL },
       
      { ngx_string("dynamic_etag_types"),
@@ -87,7 +88,8 @@ ngx_module_t  ngx_http_dynamic_etag_module = {
     NGX_MODULE_V1_PADDING
 };
 
-static void * ngx_http_dynamic_etag_create_loc_conf(ngx_conf_t *cf) {
+static void *
+ngx_http_dynamic_etag_create_loc_conf(ngx_conf_t *cf) {
     ngx_http_dynamic_etag_loc_conf_t    *conf;
 
     conf = ngx_pcalloc( cf->pool, sizeof( ngx_http_dynamic_etag_loc_conf_t ) );
@@ -104,11 +106,15 @@ static void * ngx_http_dynamic_etag_create_loc_conf(ngx_conf_t *cf) {
     return conf;
 }
 
-static char * ngx_http_dynamic_etag_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
+static char *
+ngx_http_dynamic_etag_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     ngx_http_dynamic_etag_loc_conf_t *prev = parent;
     ngx_http_dynamic_etag_loc_conf_t *conf = child;
 
-    ngx_conf_merge_value( conf->enable, prev->enable, 0 );
+    if (conf->enable == NGX_CONF_UNSET_UINT) {
+        ngx_conf_merge_uint_value(conf->enable, prev->enable, 0);
+        conf->enable_value = prev->enable_value;
+    }
 
     if (ngx_http_merge_types(cf, &conf->types_keys, &conf->types,
                              &prev->types_keys, &prev->types,
@@ -121,7 +127,8 @@ static char * ngx_http_dynamic_etag_merge_loc_conf(ngx_conf_t *cf, void *parent,
     return NGX_CONF_OK;
 }
 
-static ngx_int_t ngx_http_dynamic_etag_init(ngx_conf_t *cf) {
+static ngx_int_t
+ngx_http_dynamic_etag_init(ngx_conf_t *cf) {
     ngx_http_next_header_filter = ngx_http_top_header_filter;
     ngx_http_top_header_filter = ngx_http_dynamic_etag_header_filter;
 
@@ -131,17 +138,31 @@ static ngx_int_t ngx_http_dynamic_etag_init(ngx_conf_t *cf) {
     return NGX_OK;
 }
 
-static ngx_int_t ngx_http_dynamic_etag_header_filter(ngx_http_request_t *r) {
+static ngx_int_t
+ngx_http_dynamic_etag_header_filter(ngx_http_request_t *r) {
 
-    ngx_http_dynamic_etag_module_ctx_t       *ctx;
-     
-    ngx_http_dynamic_etag_loc_conf_t         *cf;
-   
-    cf = ngx_http_get_module_loc_conf(r, ngx_http_dynamic_etag_module);
-    
-    if(!cf->enable
-        || r->headers_out.status != NGX_HTTP_OK
-        || ngx_http_test_content_type(r, &cf->types) == NULL    
+    ngx_http_dynamic_etag_module_ctx_t  *ctx;
+    ngx_http_dynamic_etag_loc_conf_t    *conf;
+    ngx_str_t                            enable;
+
+
+    conf = ngx_http_get_module_loc_conf(r, ngx_http_dynamic_etag_module);
+
+    if (conf->enable == 0) {
+        return ngx_http_next_header_filter(r);
+    } else if (conf->enable == 2) {
+        if (ngx_http_complex_value(r, &conf->enable_value, &enable)
+            != NGX_OK) {
+            return NGX_ERROR;
+        }
+        if (enable.len == 3
+            && ngx_strncmp(enable.data, "off", 3) == 0) {
+            return ngx_http_next_header_filter(r);
+        }
+    }
+
+    if(r->headers_out.status != NGX_HTTP_OK
+        || ngx_http_test_content_type(r, &conf->types) == NULL
         || r != r->main)
     {
         return ngx_http_next_header_filter(r);
@@ -163,7 +184,7 @@ static ngx_int_t ngx_http_dynamic_etag_header_filter(ngx_http_request_t *r) {
     r->main_filter_need_in_memory = 1;
     r->filter_need_in_memory = 1;
     
-    // Make sure that ngx_http_not_modified_filter_module does its stuff
+    /* Make sure that ngx_http_not_modified_filter_module does its stuff */
     r->disable_not_modified = 0;
 
     return NGX_OK;
@@ -171,24 +192,38 @@ static ngx_int_t ngx_http_dynamic_etag_header_filter(ngx_http_request_t *r) {
 
 static u_char hex[] = "0123456789abcdef";
 
-static ngx_int_t ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in) {
-    ngx_chain_t *chain_link;
-    ngx_http_dynamic_etag_module_ctx_t       *ctx;
+static ngx_int_t
+ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
+{
+    ngx_chain_t                         *chain_link;
+    ngx_http_dynamic_etag_module_ctx_t  *ctx;
 
-    ngx_int_t  rc;
-    ngx_md5_t md5;
-    unsigned char digest[16];
-    ngx_uint_t i;
+    ngx_int_t      rc;
+    ngx_md5_t      md5;
+    unsigned char  digest[16];
+    ngx_uint_t     i;
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_dynamic_etag_module);
     if (ctx == NULL) {
         return ngx_http_next_body_filter(r, in);
     }
-	
-    ngx_http_dynamic_etag_loc_conf_t *loc_conf;
-    loc_conf = ngx_http_get_module_loc_conf(r, ngx_http_dynamic_etag_module); 
-            
-    if (1 == loc_conf->enable) {
+
+    ngx_http_dynamic_etag_loc_conf_t  *conf;
+    ngx_str_t   enable;
+
+    conf = ngx_http_get_module_loc_conf(r, ngx_http_dynamic_etag_module);
+
+
+    if (conf->enable == 2) {
+        if (ngx_http_complex_value(r, &conf->enable_value, &enable)
+            != NGX_OK) {
+            return NGX_ERROR;
+        }
+    }
+
+
+    if (1 == conf->enable
+        || (conf->enable == 2 && enable.len == 2 && ngx_strncmp(enable.data, "on", 2) == 0)) {
         if(!r->headers_out.etag) {
             ngx_md5_init(&md5);
             for (chain_link = in; chain_link; chain_link = chain_link->next) {
@@ -210,7 +245,7 @@ static ngx_int_t ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_ch
             r->headers_out.etag->value.len = 34;
             r->headers_out.etag->value.data = etag;            
         }
-    }	
+    }
 
 
     rc = ngx_http_next_header_filter(r);
@@ -221,4 +256,44 @@ static ngx_int_t ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_ch
     ngx_http_set_ctx(r, NULL, ngx_http_dynamic_etag_module);
 
     return ngx_http_next_body_filter(r, in);
+}
+
+static char *
+ngx_http_dynamic_etag_enable(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_http_dynamic_etag_loc_conf_t *clcf = conf;
+
+    ngx_str_t                         *value;
+    ngx_http_compile_complex_value_t   ccv;
+
+    if (clcf->enable != NGX_CONF_UNSET_UINT) {
+        return "is duplicate";
+    }
+
+    value = cf->args->elts;
+
+    if (ngx_strcmp(value[1].data, "on") == 0) {
+        clcf->enable = 1;
+        return NGX_CONF_OK;
+    } else if (ngx_strcmp(value[1].data, "off") == 0) {
+        clcf->enable = 0;
+        return NGX_CONF_OK;
+    } else if (ngx_strncmp(value[1].data, "$", 1) != 0) {
+        return "should be either on, off, or a $variable";
+    }
+
+    ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+
+    ccv.cf = cf;
+    ccv.value = &value[1];
+    ccv.complex_value = &clcf->enable_value;
+
+    if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
+        return NGX_CONF_ERROR;
+    }
+
+    /* variable */
+    clcf->enable = 2;
+
+    return NGX_CONF_OK;
 }
