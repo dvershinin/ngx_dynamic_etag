@@ -23,7 +23,7 @@ cache:
 before_install:
   - cpanm --notest --local-lib=$HOME/perl5 Test::Nginx
 install:
-  - wget -O - http://nginx.org/download/nginx-${SHIB_NGINX_VERSION}.tar.gz | tar -xzf -
+  - wget -O - http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz | tar -xzf -
   - cd nginx-${NGINX_VERSION}
   - git clone https://github.com/openresty/headers-more-nginx-module.git -b v0.30
   - ./configure --with-debug --add-module=..
