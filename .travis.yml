@@ -1,0 +1,38 @@
+sudo: false
+language: c
+compilers:
+  - clang
+  - gcc
+env:
+  matrix:
+    - NGINX_VERSION=1.16.0
+    - NGINX_VERSION=1.17.2    -
+addons:
+  apt:
+    packages:
+      - libpcre3-dev
+      - libssl-dev
+      - perl
+      - cpanminus
+cache:
+  apt: true
+  cpan: true
+  ccache: true
+  directories:
+    - $HOME/perl5
+before_install:
+  - cpanm --notest --local-lib=$HOME/perl5 Test::Nginx
+install:
+  - wget -O - http://nginx.org/download/nginx-${SHIB_NGINX_VERSION}.tar.gz | tar -xzf -
+  - cd nginx-${NGINX_VERSION}
+  - git clone https://github.com/openresty/headers-more-nginx-module.git -b v0.30
+  - ./configure --with-debug --add-module=..
+  - make
+  - export PATH=$(pwd)/objs:$PATH
+  - cd ..
+script:
+  - PERL5LIB=$HOME/perl5/lib/perl5 TEST_NGINX_VERBOSE=true prove -v
+after_failure:
+  - cat t/servroot/conf/nginx.conf
+  - cat t/servroot/access.log
+  - cat t/servroot/error.log
