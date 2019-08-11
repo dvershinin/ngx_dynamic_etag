@@ -1,6 +1,5 @@
-sudo: false
 language: c
-compilers:
+compiler:
   - clang
   - gcc
 env:
