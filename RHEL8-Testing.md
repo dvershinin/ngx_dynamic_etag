@@ -35,3 +35,5 @@ ln -fs ${HOME}/Projects/nginx-stable/objs/nginx ./nginx
 ```
 
 * [Running Tests](https://openresty.gitbooks.io/programming-openresty/content/testing/running-tests.html)
+* [ngx-releng utility](https://github.com/openresty/openresty-devel-utils/blob/master/ngx-releng)
+* [tests reindex](https://github.com/openresty/openresty-devel-utils/blob/master/reindex)
