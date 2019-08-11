@@ -22,7 +22,27 @@ hello world
 ETag: "6f5902ac237024bdd0c176cb93063dc4"
 
 
-=== TEST 2: conditional get
+
+=== TEST 2: etag with proxy_pass differs
+--- config
+    location = /hello {
+        return 200 "hello earth\n";
+    }
+    location = /hello-proxy {
+        dynamic_etag on;
+        dynamic_etag_types text/plain;
+        proxy_pass http://127.0.0.1:$TEST_NGINX_SERVER_PORT/hello;
+    }
+--- request
+    GET /hello-proxy
+--- response_body
+hello earth
+--- response_headers
+ETag: "e5e0da9cf469b4842019c15e3ca531d1"
+
+
+
+=== TEST 3: conditional get
 --- config
     location = /hello {
         return 200 "hello world\n";
