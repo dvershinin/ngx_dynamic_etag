@@ -60,6 +60,7 @@ If-None-Match: "6f5902ac237024bdd0c176cb93063dc4"
 --- response_body
 
 
+
 === TEST 4: etag with proxy_pass + proxy_buffering
 --- config
     location = /hello {
@@ -93,6 +94,7 @@ ETag: "0ada7fc2e9c81a3699a0ab65bea60f54"
     HEAD /hello-proxy
 --- response_headers
 !ETag
+
 
 
 === TEST 6: etag simple
