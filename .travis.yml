@@ -25,7 +25,6 @@ before_install:
 install:
   - wget -O - http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz | tar -xzf -
   - cd nginx-${NGINX_VERSION}
-  - git clone https://github.com/openresty/headers-more-nginx-module.git -b v0.30
   - ./configure --with-debug --add-module=..
   - make -j$(nproc)
   - export PATH=$(pwd)/objs:$PATH
