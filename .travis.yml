@@ -14,8 +14,6 @@ addons:
       - perl
       - cpanminus
 cache:
-  apt: true
-  cpan: true
   ccache: true
   directories:
     - $HOME/perl5
@@ -25,7 +23,7 @@ install:
   - wget -O - http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz | tar -xzf -
   - cd nginx-${NGINX_VERSION}
   - ./configure --with-debug --add-module=..
-  - make -j$(nproc)
+  - make -j2
   - export PATH=$(pwd)/objs:$PATH
   - cd ..
 script:
