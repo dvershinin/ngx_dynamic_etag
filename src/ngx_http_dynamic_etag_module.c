@@ -148,7 +148,8 @@ ngx_http_dynamic_etag_header_filter(ngx_http_request_t *r) {
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_dynamic_etag_module);
 
-    if (conf->enable == 0) {
+    if (conf->enable == 0
+        || r->method & NGX_HTTP_HEAD) {
         return ngx_http_next_header_filter(r);
     } else if (conf->enable == 2) {
         if (ngx_http_complex_value(r, &conf->enable_value, &enable)
