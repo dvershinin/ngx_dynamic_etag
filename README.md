@@ -1,6 +1,7 @@
 # ngx_dynamic_etag
 
 [![Build Status](https://travis-ci.org/dvershinin/ngx_dynamic_etag.svg?branch=master)](https://travis-ci.org/dvershinin/ngx_dynamic_etag)
+![Coverity Scan](https://img.shields.io/coverity/scan/dvershinin-ngx_dynamic_etag)
 
 This NGINX module empowers your dynamic content with automatic [`ETag`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag)
 header. It allows client browsers to issue conditional `GET` requests to 

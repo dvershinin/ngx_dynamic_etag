@@ -3,6 +3,10 @@ compiler:
   - clang
   - gcc
 env:
+  global:
+    # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
+    #   via the "travis encrypt" command using the project repo's public key
+    - secure: "ZQymYx2v/NXyAnFKvgcfIYAjvCD5X/CWcW8zhfVWmz5udpyATTvZ6AHwGelboU4nbPA86OpS/A5iHKqDmYP6LOqsxLbCein1pgeh4Zbz6nOASiZZqN6X+rIdv/FXueELg/rxEXc0OPIPgQWtSLsA726o/RMCiBx9trOi4pf9R916fQ5ylfQHyZlCzR9Sg7Ga3f4Sx9KTPcGuS2dLXAKHExnYIT5cC+QkXcAs8yVSDSN31+Qx/BeZC0HOE02deyVdDLQQPu/f9B8WI7x/kvBw4PyMgAgRS3QTIFlyDDhgOTGUF7LGAfaMIrWT/0r2HGrEam+0xR7JZnzE6RYLifNi3KlDKdMgcuHlDJcxVOvQCmnznHTr6RcC0kO8VYFnxUJBkOuUbZ9jhvIEvgEaHLsiuhwEVmFTh33cB/u4NH8O70O1Zg/nQPRhL9G+x2sUL3De8xEvqfGOJ/5eUo4YzVv0Nqx4t0x141RVOSmiw2htOmkQjhgTU5g5BuKihLy4PtvH1H3MuhfA9uexedSAqeluzytMPDxOsQnDDtKZYu4m4lCNj94nn6Q/n+3Z1G9u2hgw86G3VO2zlAk0aVq1pGBRIQfTE2rmEhQbmKBQpq3mjr+hto42kq040sQ6/O/8AnE2RSGxnEnr2glJVbPRTVJdSBsK/y+13Plgt6CfgoiT6O4="
   matrix:
     - NGINX_VERSION=1.16.0
     - NGINX_VERSION=1.17.2    -
@@ -13,6 +17,13 @@ addons:
       - libssl-dev
       - perl
       - cpanminus
+  coverity_scan:
+    project:
+      name: "dvershinin/ngx_dynamic_etag"
+      description: "NGINX module for adding ETag to dynamic content"
+    build_command_prepend: "wget -O - http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz | tar -xzf - && cd nginx-${NGINX_VERSION} && ./configure --with-debug --add-module=.."
+    build_command: "make -j2"
+    branch_pattern: coverity_scan
 cache:
   ccache: true
   directories:
