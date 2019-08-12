@@ -253,7 +253,11 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 etag[2 * i + 1] = hex[digest[i] >> 4];
                 etag[2 * i + 2] = hex[digest[i] & 0xf];
             }
+
             r->headers_out.etag = ngx_list_push(&r->headers_out.headers);
+            if (r->headers_out.etag == NULL) {
+                return NGX_ERROR;
+            }
             r->headers_out.etag->hash = 1;
             r->headers_out.etag->key.len = sizeof("ETag") - 1;
             r->headers_out.etag->key.data = (u_char *) "ETag";
