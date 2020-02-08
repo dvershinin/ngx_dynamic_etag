@@ -24,7 +24,7 @@ PERL_MM_OPT="INSTALL_BASE=/home/danila/perl5"; export PERL_MM_OPT;
 
 For testing, the module needs to be compiled in statically:
 
-    ./configure --prefix=${HOME}/nginx-stable --add-module=../ngx_dynamic_etag
+    ./configure --prefix=${HOME}/nginx-stable --add-module=../ngx_dynamic_etag --with-http_ssl_module
 
 ... and nginx available to your `PATH`. Considering that `.local/bin` is in your `PATH` (typical Python user), 
 you can symlink compiled `nginx` binary in that directory:

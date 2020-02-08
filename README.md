@@ -16,7 +16,7 @@ The original author abandoned it, [having to say](https://github.com/kali/nginx-
  > It never really worked.
 
 I largely rewrote it to deal with existing obvious faults, but the key part with buffers, 
-which, myself being old, I probably will never understand, is untouched.
+which, myself being old, I probably wil l never understand, is untouched.
 
 To be reliable, the module has to read entire response and take a hash of it. 
 Reading entire response is against NGINX lightweight design.
@@ -86,10 +86,10 @@ Responses with the `text/html` MIME type are always included.
 
 ## Installation for stable NGINX
 
-### RHEL/CentOS 6/7
+### CentOS/RHEL 6, 7, 8
 
-    yum install https://extras.getpagespeed.com/release-el$(rpm -E %{rhel})-latest.rpm
-    yum install nginx nginx-module-dynamic-etag
+    sudo yum -y install https://extras.getpagespeed.com/release-latest.rpm
+    sudo yum install nginx-module-dynamic-etag
 
 Follow the installation prompt to import GPG public key that is used for verifying packages.
 
