@@ -2,6 +2,7 @@
 
 [![Build Status](https://travis-ci.org/dvershinin/ngx_dynamic_etag.svg?branch=master)](https://travis-ci.org/dvershinin/ngx_dynamic_etag)
 [![Coverity Scan](https://img.shields.io/coverity/scan/dvershinin-ngx_dynamic_etag)](https://scan.coverity.com/projects/dvershinin-ngx_dynamic_etag)
+[![Buy Me a Coffee](https://img.shields.io/badge/dynamic/json?color=blue&label=Buy%20me%20a%20Coffee&prefix=%23&query=next_time_total&url=https%3A%2F%2Fwww.getpagespeed.com%2Fbuymeacoffee.json&logo=buymeacoffee)](https://www.buymeacoffee.com/dvershinin)
 
 This NGINX module empowers your dynamic content with automatic [`ETag`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag)
 header. It allows client browsers to issue conditional `GET` requests to 
