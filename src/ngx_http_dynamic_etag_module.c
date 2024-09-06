@@ -98,7 +98,7 @@ ngx_http_dynamic_etag_create_loc_conf(ngx_conf_t *cf)
 
     conf = ngx_pcalloc( cf->pool, sizeof( ngx_http_dynamic_etag_loc_conf_t ) );
     if (conf == NULL) {
-        return NGX_CONF_ERROR;
+        return NULL;
     }
     /*
      * set by ngx_pcalloc():
