@@ -21,9 +21,6 @@ jobs:
       - name: Create NGINX download directory
         run: mkdir nginx
 
-      - name: Set up writable cache directory
-        run: mkdir -p ${{ github.workspace }}/.cache
-
       - name: Download ${{ matrix.nginx-branch }} NGINX
         uses: dvershinin/lastversion-action@main
         with:
@@ -32,7 +29,7 @@ jobs:
           branch: ${{ matrix.nginx-branch }}
           working_directory: ./nginx
         env:
-          XDG_CACHE_HOME: ${{ github.workspace }}/.cache
+          XDG_CACHE_HOME: ${{ github.workspace }}
 
       - name: Configure NGINX to compile with the module statically
         run: |
