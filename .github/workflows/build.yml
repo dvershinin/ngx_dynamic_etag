@@ -19,7 +19,7 @@ jobs:
           sudo apt-get install --yes libpcre3-dev libssl-dev perl cpanminus
 
       - name: Create NGINX download directory
-        run: mkdir nginx
+        run: mkdir nginx && mkdir -p /github/workspace/lastversion && pwd
 
       - name: Download ${{ matrix.nginx-branch }} NGINX
         uses: dvershinin/lastversion-action@main
