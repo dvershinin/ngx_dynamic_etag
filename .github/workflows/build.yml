@@ -16,18 +16,21 @@ jobs:
       - name: Install build and test dependencies
         run: |
           sudo apt-get --yes update
-          sudo apt-get install --yes libpcre3-dev libssl-dev perl cpanminus
+          sudo apt-get install --yes libpcre3-dev libssl-dev perl cpanminus wget
 
       - name: Create NGINX download directory
-        run: mkdir nginx
+        run: |
+          # mkdir nginx
+          wget -O nginx.tar.gz https://nginx.org/download/nginx-1.26.2.tar.gz
+          tar -xzf nginx.tar.gz -C nginx --strip-components=1
 
-      - name: Download ${{ matrix.nginx-branch }} NGINX
-        uses: dvershinin/lastversion-action@main
-        with:
-          repository: 'nginx'
-          action: 'unzip'
-          branch: ${{ matrix.nginx-branch }}
-          working_directory: ./nginx
+#      - name: Download ${{ matrix.nginx-branch }} NGINX
+#        uses: dvershinin/lastversion-action@main
+#        with:
+#          repository: 'nginx'
+#          action: 'unzip'
+#          branch: ${{ matrix.nginx-branch }}
+#          working_directory: ./nginx
 
       - name: Configure NGINX to compile with the module statically
         run: |
