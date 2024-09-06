@@ -20,7 +20,10 @@ jobs:
 
       - name: Create NGINX download directory
         run: mkdir nginx
-          
+
+      - name: Set up writable cache directory
+        run: mkdir -p ${{ github.workspace }}/.cache
+
       - name: Download ${{ matrix.nginx-branch }} NGINX
         uses: dvershinin/lastversion-action@main
         with:
