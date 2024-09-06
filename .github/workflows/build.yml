@@ -18,9 +18,6 @@ jobs:
           sudo apt-get --yes update
           sudo apt-get install --yes libpcre3-dev libssl-dev perl cpanminus
 
-      - name: Create NGINX download directory
-        run: mkdir nginx && pwd
-
       - name: Download ${{ matrix.nginx-branch }} NGINX
         uses: dvershinin/lastversion-action@main
         with:
@@ -28,8 +25,6 @@ jobs:
           action: 'unzip'
           branch: ${{ matrix.nginx-branch }}
           working_directory: ./nginx
-        env:
-          XDG_CACHE_HOME: ${{ github.workspace }}
 
       - name: Configure NGINX to compile with the module statically
         run: |
