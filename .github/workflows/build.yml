@@ -28,6 +28,8 @@ jobs:
           action: 'unzip'
           branch: ${{ matrix.nginx-branch }}
           working_directory: ./nginx
+        env:
+          XDG_CACHE_HOME: ${{ github.workspace }}/.cache
 
       - name: Configure NGINX to compile with the module statically
         run: |
