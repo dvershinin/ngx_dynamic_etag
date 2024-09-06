@@ -153,8 +153,12 @@ ngx_http_dynamic_etag_header_filter(ngx_http_request_t *r)
     ngx_http_dynamic_etag_loc_conf_t    *conf;
     ngx_str_t                            enable;
 
-
     conf = ngx_http_get_module_loc_conf(r, ngx_http_dynamic_etag_module);
+
+    // Skip processing if not fetching from upstream (e.g., FastCGI)
+    if (r->upstream == NULL) {
+        return ngx_http_next_header_filter(r);
+    }
 
     if (conf->enable == 0 || r->method & NGX_HTTP_HEAD) {
         return ngx_http_next_header_filter(r);
@@ -210,6 +214,11 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     ngx_md5_t      md5;
     unsigned char  digest[16];
     ngx_uint_t     i;
+
+    // If the response is not from the upstream, skip processing
+    if (r->upstream == NULL) {
+        return ngx_http_next_body_filter(r, in);
+    }
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_dynamic_etag_module);
     if (ctx == NULL) {
