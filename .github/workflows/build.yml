@@ -20,7 +20,7 @@ jobs:
 
       - name: Create NGINX download directory
         run: |
-          # mkdir nginx
+          mkdir nginx
           wget -O nginx.tar.gz https://nginx.org/download/nginx-1.26.2.tar.gz
           tar -xzf nginx.tar.gz -C nginx --strip-components=1
 
