@@ -33,11 +33,15 @@ which is definitely worse.
 
 Thus, be sure you check headers like this:
 
-    curl -IL -X GET https://www.example.com/
+```bash
+curl -IL -X GET https://www.example.com/
+```
     
  And not like this:
- 
-     curl -IL https://www.example.com/
+
+ ```bash
+curl -IL https://www.example.com/
+```
      
 Another worthy thing to mention is that it makes little to no sense applying dynamic `ETag` on a page that changes on 
 each reload. E.g. I found I wasn't using the dynamic `ETag` with benefits, because of `<?= antispambot(get_option('admin_email')) ?>`,
@@ -47,14 +51,16 @@ in my Wordpress theme's `header.php`, since in this function:
 
 To quickly check if your page is changing on reload, use:
 
-    diff <(curl http://www.example.com") <(curl http://www.example.com")
+```bash
+diff <(curl http://www.example.com") <(curl http://www.example.com")
+```
 
 Now that we're done with the "now you know" yada-yada, you can proceed with trying out this stuff :)    
 
 
 ## Synopsis
 
-```
+```nginx
 http {
     server {
         location ~ \.php$ {
@@ -87,34 +93,48 @@ Responses with the `text/html` MIME type are always included.
 
 ## Installation for stable NGINX
 
-### CentOS/RHEL 6, 7, 8
+Pre-compiled module packages are available for virtually any RHEL-based distro like Rocky Linux, AlmaLinux, etc.
 
-    sudo yum -y install https://extras.getpagespeed.com/release-latest.rpm
-    sudo yum install nginx-module-dynamic-etag
+### Any distro with `yum`
+
+```
+sudo yum -y install https://extras.getpagespeed.com/release-latest.rpm
+sudo yum install nginx-module-dynamic-etag
+```
+
+### Any distro with `dnf`
+
+```bash
+sudo dnf -y install https://extras.getpagespeed.com/release-latest.rpm
+sudo dnf install nginx-module-dynamic-etag
+```
 
 Follow the installation prompt to import GPG public key that is used for verifying packages.
 
 Then add the following at the top of your `/etc/nginx/nginx.conf`:
 
-    load_module modules/ngx_http_dynamic_etag_module.so;
+```nginx
+load_module modules/ngx_http_dynamic_etag_module.so;
+```
 
 ## Tips
 
 You can use `map` directive for conditionally enabling dynamic `ETag` based on URLs, e.g.:
 
-    map $request_uri $dyn_etag {
-        default "off";
-        /foo "on";
-        /bar "on";
-    }
-    server { 
-       ...
-       location / {
-           dynamic_etag $dyn_etag;
-           fastcgi_pass ...
-       }
-    }       
-        
+```nginx
+map $request_uri $dyn_etag {
+    default "off";
+    /foo "on";
+    /bar "on";
+}
+server { 
+   ...
+   location / {
+       dynamic_etag $dyn_etag;
+       fastcgi_pass ...
+   }
+}       
+```        
 
 ## Original author's README
 
