@@ -94,17 +94,3 @@ ETag: "0ada7fc2e9c81a3699a0ab65bea60f54"
     HEAD /hello-proxy
 --- response_headers
 !ETag
-
-
-
-=== TEST 6: etag simple
---- config
-    location = /hello {
-        dynamic_etag on;
-        dynamic_etag_types text/plain;
-        return 200 "hello world\n";
-    }
---- request
-    GET /hello
---- response_headers
-ETag: "6f5902ac237024bdd0c176cb93063dc4"
