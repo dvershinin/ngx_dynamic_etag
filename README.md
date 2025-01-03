@@ -45,7 +45,7 @@ curl -IL https://www.example.com/
      
 Another worthy thing to mention is that it makes little to no sense applying dynamic `ETag` on a page that changes on 
 each reload. E.g. I found I wasn't using the dynamic `ETag` with benefits, because of `<?= antispambot(get_option('admin_email')) ?>`,
-in my Wordpress theme's `header.php`, since in this function:
+in my WordPress theme's `header.php`, since in this function:
 
 > the selection is random and changes each time the function is called 
 
