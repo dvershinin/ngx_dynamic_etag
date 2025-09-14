@@ -1,3 +1,5 @@
 /nbproject
 /.idea
 /t/servroot
+/t/_cache*
+cmake-build-*/

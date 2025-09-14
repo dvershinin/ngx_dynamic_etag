@@ -94,3 +94,27 @@ ETag: "0ada7fc2e9c81a3699a0ab65bea60f54"
     HEAD /hello-proxy
 --- response_headers
 !ETag
+
+
+=== TEST 6: repeated proxy requests return the same ETag
+--- config
+    location = /repeat {
+        return 200 "hello world\n";
+    }
+    location = /repeat-proxy {
+        dynamic_etag on;
+        dynamic_etag_types text/plain;
+        proxy_pass http://127.0.0.1:$TEST_NGINX_SERVER_PORT/repeat;
+    }
+--- request
+    GET /repeat-proxy
+--- response_body
+hello world
+--- response_headers
+ETag: "6f5902ac237024bdd0c176cb93063dc4"
+--- request
+    GET /repeat-proxy
+--- response_body
+hello world
+--- response_headers
+ETag: "6f5902ac237024bdd0c176cb93063dc4"

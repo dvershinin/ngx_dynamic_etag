@@ -26,6 +26,8 @@ typedef struct {
 
 typedef struct {
     ngx_flag_t done;
+    u_char    *file_buf;
+    size_t     file_buf_size;
 } ngx_http_dynamic_etag_module_ctx_t;
 
 static ngx_http_output_header_filter_pt  ngx_http_next_header_filter;
@@ -214,6 +216,7 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     ngx_md5_t      md5;
     unsigned char  digest[16];
     ngx_uint_t     i;
+    size_t         hashed_bytes = 0;
 
     // If the response is not from the upstream, skip processing
     if (r->upstream == NULL) {
@@ -247,9 +250,51 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         if (!r->headers_out.etag) {
             ngx_md5_init(&md5);
             for (chain_link = in; chain_link; chain_link = chain_link->next) {
-                ngx_md5_update(&md5,
-                               chain_link->buf->pos,
-                          chain_link->buf->last - chain_link->buf->pos);
+                ngx_buf_t *b = chain_link->buf;
+
+                /* Hash in-memory buffer content if present */
+                if (b->pos && b->last && b->last > b->pos) {
+                    size_t len = (size_t) (b->last - b->pos);
+                    ngx_md5_update(&md5, b->pos, len);
+                    hashed_bytes += len;
+                }
+
+                /* Hash file-backed buffer content if present */
+                if (b->in_file && b->file && b->file_last > b->file_pos) {
+                    off_t offset = b->file_pos;
+                    const off_t end = b->file_last;
+                    /* read in chunks to avoid large allocations */
+                    size_t chunk;
+                    u_char *tmp;
+                    /* allocate reusable buffer in ctx once */
+                    if (ctx->file_buf == NULL) {
+                        ctx->file_buf_size = 8192;
+                        ctx->file_buf = ngx_palloc(r->pool, ctx->file_buf_size);
+                        if (ctx->file_buf == NULL) {
+                            return NGX_ERROR;
+                        }
+                    }
+                    tmp = ctx->file_buf;
+                    chunk = ctx->file_buf_size;
+
+                    while (offset < end) {
+                        size_t to_read = (size_t) ((end - offset) > (off_t) chunk ? chunk : (size_t) (end - offset));
+                        ssize_t n = ngx_read_file(b->file, tmp, to_read, offset);
+                        if (n == NGX_ERROR) {
+                            return NGX_ERROR;
+                        }
+                        if (n == 0) {
+                            break;
+                        }
+                        ngx_md5_update(&md5, tmp, (size_t) n);
+                        hashed_bytes += (size_t) n;
+                        offset += n;
+                    }
+                }
+            }
+            if (hashed_bytes == 0) {
+                /* Avoid emitting ETag for empty content */
+                goto done;
             }
             ngx_md5_final(digest, &md5);
 
@@ -276,6 +321,7 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     }
 
 
+done:
     rc = ngx_http_next_header_filter(r);
     if (rc == NGX_ERROR || rc > NGX_OK) {
         return NGX_ERROR;
