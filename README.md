@@ -77,7 +77,7 @@ http {
 
 - **syntax**: `dynamic_etag on|off|$var`
 - **default**: `off`
-- **context**: `http`, `server`, `location`, `if`
+- **context**: `http`, `server`, `location`
 
 Enables or disables applying ETag automatically.
 
@@ -90,6 +90,36 @@ Enables or disables applying ETag automatically.
 Enables applying ETag automatically for the specified MIME types
 in addition to `text/html`. The special value `*` matches any MIME type.
 Responses with the `text/html` MIME type are always included.
+
+### `dynamic_etag_strength`
+
+- **syntax**: `dynamic_etag_strength strong|weak|$var`
+- **default**: `strong`
+- **context**: `http`, `server`, `location`
+
+Controls whether generated ETags are strong or weak. Weak ETags are useful for
+dynamic content where semantic equality should be considered even if the
+bytes differ (e.g., timestamps, randomized attributes). When using `$var`, map
+to values `strong` or `weak`.
+
+Note: These directives are not valid in the `if` context. Prefer using `$var`
+with `map` to achieve conditional behavior.
+
+Example with `map`:
+
+```nginx
+map $arg_w $etag_strength {
+    default strong;
+    1       weak;
+}
+
+location /example {
+    dynamic_etag on;
+    dynamic_etag_types text/html;
+    dynamic_etag_strength $etag_strength;
+    proxy_pass http://backend;
+}
+```
 
 ## Installation for stable NGINX
 

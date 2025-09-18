@@ -20,6 +20,8 @@
 typedef struct {
     ngx_uint_t   enable;
     ngx_http_complex_value_t enable_value;
+    ngx_uint_t   strength;
+    ngx_http_complex_value_t strength_value;
     ngx_hash_t   types;
     ngx_array_t  *types_keys;
 } ngx_http_dynamic_etag_loc_conf_t;
@@ -42,6 +44,8 @@ static ngx_int_t ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r,
     ngx_chain_t *in);
 static char *ngx_http_dynamic_etag_enable(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
+static char *ngx_http_dynamic_etag_strength(ngx_conf_t *cf, ngx_command_t *cmd,
+    void *conf);
 
 static ngx_command_t  ngx_http_dynamic_etag_commands[] = {
 
@@ -58,6 +62,13 @@ static ngx_command_t  ngx_http_dynamic_etag_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_dynamic_etag_loc_conf_t, types_keys),
       &ngx_http_html_default_types[0] },
+
+     { ngx_string( "dynamic_etag_strength" ),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_http_dynamic_etag_strength,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      0,
+      NULL },
 
       ngx_null_command
 };
@@ -109,6 +120,7 @@ ngx_http_dynamic_etag_create_loc_conf(ngx_conf_t *cf)
      *     conf->types_keys = NULL;
      */
     conf->enable = NGX_CONF_UNSET_UINT;
+    conf->strength = NGX_CONF_UNSET_UINT;
     return conf;
 }
 
@@ -122,6 +134,11 @@ ngx_http_dynamic_etag_merge_loc_conf(ngx_conf_t *cf, void *parent,
     if (conf->enable == NGX_CONF_UNSET_UINT) {
         ngx_conf_merge_uint_value(conf->enable, prev->enable, 0);
         conf->enable_value = prev->enable_value;
+    }
+
+    if (conf->strength == NGX_CONF_UNSET_UINT) {
+        ngx_conf_merge_uint_value(conf->strength, prev->strength, 0); /* 0: strong (default), 1: weak, 2: variable */
+        conf->strength_value = prev->strength_value;
     }
 
     if (ngx_http_merge_types(cf, &conf->types_keys, &conf->types,
@@ -230,6 +247,8 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
     ngx_http_dynamic_etag_loc_conf_t  *conf;
     ngx_str_t   enable;
+    ngx_uint_t  weak = 0;
+    ngx_str_t   strength;
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_dynamic_etag_module);
 
@@ -247,6 +266,20 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         || (conf->enable == 2 && enable.len == 2
         && ngx_strncmp(enable.data, "on", 2) == 0))
     {
+        /* Resolve strength (weak/strong) */
+        if (conf->strength == 1) {
+            weak = 1;
+        } else if (conf->strength == 2) {
+            if (ngx_http_complex_value(r, &conf->strength_value, &strength)
+                != NGX_OK)
+            {
+                return NGX_ERROR;
+            }
+            if (strength.len == 4 && ngx_strncmp(strength.data, "weak", 4) == 0) {
+                weak = 1;
+            }
+        }
+
         if (!r->headers_out.etag) {
             ngx_md5_init(&md5);
             for (chain_link = in; chain_link; chain_link = chain_link->next) {
@@ -298,14 +331,26 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             }
             ngx_md5_final(digest, &md5);
 
-            unsigned char * etag = ngx_pcalloc(r->pool, 34);
+            size_t etag_len = weak ? 36 : 34;
+            unsigned char * etag = ngx_pcalloc(r->pool, etag_len);
             if (etag == NULL) {
                 return NGX_ERROR;
             }
-            etag[0] = etag[33] = '"';
-            for ( i = 0 ; i < 16; i++ ) {
-                etag[2 * i + 1] = hex[digest[i] >> 4];
-                etag[2 * i + 2] = hex[digest[i] & 0xf];
+            if (weak) {
+                etag[0] = 'W';
+                etag[1] = '/';
+                etag[2] = '"';
+                etag[35] = '"';
+                for ( i = 0 ; i < 16; i++ ) {
+                    etag[2 * i + 3] = hex[digest[i] >> 4];
+                    etag[2 * i + 4] = hex[digest[i] & 0xf];
+                }
+            } else {
+                etag[0] = etag[33] = '"';
+                for ( i = 0 ; i < 16; i++ ) {
+                    etag[2 * i + 1] = hex[digest[i] >> 4];
+                    etag[2 * i + 2] = hex[digest[i] & 0xf];
+                }
             }
 
             r->headers_out.etag = ngx_list_push(&r->headers_out.headers);
@@ -315,7 +360,7 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             r->headers_out.etag->hash = 1;
             r->headers_out.etag->key.len = sizeof("ETag") - 1;
             r->headers_out.etag->key.data = (u_char *) "ETag";
-            r->headers_out.etag->value.len = 34;
+            r->headers_out.etag->value.len = etag_len;
             r->headers_out.etag->value.data = etag;
         }
     }
@@ -368,6 +413,46 @@ ngx_http_dynamic_etag_enable(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     /* variable */
     clcf->enable = 2;
+
+    return NGX_CONF_OK;
+}
+
+static char *
+ngx_http_dynamic_etag_strength(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_http_dynamic_etag_loc_conf_t *clcf = conf;
+
+    ngx_str_t                         *value;
+    ngx_http_compile_complex_value_t   ccv;
+
+    if (clcf->strength != NGX_CONF_UNSET_UINT) {
+        return "is duplicate";
+    }
+
+    value = cf->args->elts;
+
+    if (ngx_strcmp(value[1].data, "strong") == 0) {
+        clcf->strength = 0;
+        return NGX_CONF_OK;
+    } else if (ngx_strcmp(value[1].data, "weak") == 0) {
+        clcf->strength = 1;
+        return NGX_CONF_OK;
+    } else if (ngx_strncmp(value[1].data, "$", 1) != 0) {
+        return "directive should be either strong, weak, or a $variable";
+    }
+
+    ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+
+    ccv.cf = cf;
+    ccv.value = &value[1];
+    ccv.complex_value = &clcf->strength_value;
+
+    if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
+        return NGX_CONF_ERROR;
+    }
+
+    /* variable */
+    clcf->strength = 2;
 
     return NGX_CONF_OK;
 }
