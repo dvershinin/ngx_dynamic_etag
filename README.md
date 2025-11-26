@@ -10,20 +10,9 @@ dynamic pages. And thus saves bandwidth and ensures better performance!
 
 ## Caveats first!
 
-This module is a real hack: it calls a header filter from a body filter, etc. 
+This module is a real hack: it calls a header filter from a body filter, etc. It works, but in its current form, *not* production-ready.
 
-The original author abandoned it, [having to say](https://github.com/kali/nginx-dynamic-etags/issues/2):
- 
- > It never really worked.
-
-I largely rewrote it to deal with existing obvious faults, but the key part with buffers, 
-which, myself being old, I probably wil l never understand, is untouched.
-
-To be reliable, the module has to read entire response and take a hash of it. 
-Reading entire response is against NGINX lightweight design.
-I am not sure whether the buffer part waits for the entire response.
-
-Having said that, the tests which I added showcase that this whole stuff works!
+See "Technical Limitations" at the bottom of this page.
 
 Note that the `HEAD` requests will not have any `ETag` returned, because we have no data to play with, 
 since NGINX rightfully discards body for this request method.
@@ -179,16 +168,31 @@ server {
 }       
 ```        
 
-## Original author's README
 
-Attempt at handling ETag / If-None-Match on proxied content.
+## Technical Limitations (Code Review 2025)
 
-I plan on using this to front a Varnish server using a lot of ESI.
+A review of the source code (v1.26.x era) reveals significant design flaws that make this module unsuitable for production in its current state:
 
-It does kind of work, but... be aware, this is my first attempt at developing
-a nginx plugin, and dealing with headers after having read the body was not
-exactly in the how-to.
+1.  **Broken ETag for Streamed Responses**:
+    The module initializes a new MD5 context for every chunk of the response body (`ngx_http_dynamic_etag_body_filter`). It hashes only the first chunk, generates an ETag, and sends headers. Subsequent chunks are ignored for hashing purposes. This means:
+    -   Large responses (spanning multiple buffers) get an ETag based solely on the first buffer.
+    -   Files differing only after the first buffer will receive identical ETags (collisions).
 
-Any comment and/or improvement and/or fork is welcome.
+2.  **Blocking I/O in Event Loop**:
+    The code explicitly calls `ngx_read_file` (synchronous/blocking read) inside the body filter loop when handling file-backed buffers. This blocks the entire Nginx worker process during disk I/O, defeating Nginx's non-blocking architecture and potentially causing severe performance degradation under load.
 
-Thanks to http://github.com/kkung/nginx-static-etags/ for... inspiration.
+3.  **Protocol & State Violations**:
+    -   **Header Injection Timing**: The module attempts to hold back headers by returning `NGX_OK` in the header filter, then calls `ngx_http_next_header_filter` from within the *body filter*. This is architecturally incorrect and dangerous, as it violates the separation of header and body phases.
+    -   **Multiple Header Sends**: For multi-chunk responses, the body filter code logic risks calling the next header filter multiple times.
+
+4.  **Memory Inefficiency**:
+    It sets `r->main_filter_need_in_memory = 1`, forcing Nginx to read potentially large responses into memory, increasing RAM usage significantly for serving files.
+
+## TODO
+
+To fix these issues, a complete rewrite of the filter logic is required:
+
+-   [ ] **Implement Context-Aware Hashing**: Create a request module context to store the MD5 state (`ngx_md5_t`) across multiple body filter calls. Initialize on the first call, update on subsequent calls, and finalize only when `last_buf` or `last_in_chain` is seen.
+-   [ ] **Full Body Buffering**: Since ETag requires the *entire* content to be known before sending the header, the module must intercept and buffer the entire response body (similar to how the `upstream` module works or using a temporary file) before calculating the final hash and sending headers. *Note: This negate the benefits of streaming.*
+-   [ ] **Remove Blocking I/O**: Rely on Nginx's internal buffer handling or asynchronous file operations instead of direct `ngx_read_file`.
+-   [ ] **Fix Header Filter Logic**: Restore standard header filter behavior. If buffering is implemented, headers will naturally be delayed until the buffer is ready.
