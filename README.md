@@ -125,6 +125,19 @@ location /example {
 
 Pre-compiled module packages are available for virtually any RHEL-based distro like Rocky Linux, AlmaLinux, etc.
 
+### Any Ubuntu or Debian
+
+`ngx_dynamic_etag` is part of the APT NGINX Extras collection, so you can install
+it alongside [any modules](https://apt-nginx-extras.getpagespeed.com/modules/), 
+including Brotli.
+
+First, [set up the repository](https://apt-nginx-extras.getpagespeed.com/apt-setup/), then:
+
+```bash
+sudo apt-get update
+sudo apt-get install nginx-module-dynamic-etag
+```
+
 ### Any distro with `yum`
 
 ```
