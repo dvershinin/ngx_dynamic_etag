@@ -27,9 +27,9 @@ typedef struct {
 } ngx_http_dynamic_etag_loc_conf_t;
 
 typedef struct {
-    ngx_flag_t done;
-    u_char    *file_buf;
-    size_t     file_buf_size;
+    ngx_flag_t  done;           /* ETag already generated */
+    u_char     *file_buf;       /* reusable buffer for file reads */
+    size_t      file_buf_size;
 } ngx_http_dynamic_etag_module_ctx_t;
 
 static ngx_http_output_header_filter_pt  ngx_http_next_header_filter;
@@ -228,14 +228,18 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 {
     ngx_chain_t                         *chain_link;
     ngx_http_dynamic_etag_module_ctx_t  *ctx;
+    ngx_http_dynamic_etag_loc_conf_t    *conf;
 
     ngx_int_t      rc;
     ngx_md5_t      md5;
     unsigned char  digest[16];
     ngx_uint_t     i;
     size_t         hashed_bytes = 0;
+    ngx_str_t      enable;
+    ngx_uint_t     weak = 0;
+    ngx_str_t      strength;
 
-    // If the response is not from the upstream, skip processing
+    /* If the response is not from the upstream, skip processing */
     if (r->upstream == NULL) {
         return ngx_http_next_body_filter(r, in);
     }
@@ -245,26 +249,17 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         return ngx_http_next_body_filter(r, in);
     }
 
-    ngx_http_dynamic_etag_loc_conf_t  *conf;
-    ngx_str_t   enable;
-    ngx_uint_t  weak = 0;
-    ngx_str_t   strength;
-
     conf = ngx_http_get_module_loc_conf(r, ngx_http_dynamic_etag_module);
 
-
     if (conf->enable == 2) {
-        if (ngx_http_complex_value(r, &conf->enable_value, &enable)
-            != NGX_OK)
-        {
+        if (ngx_http_complex_value(r, &conf->enable_value, &enable) != NGX_OK) {
             return NGX_ERROR;
         }
     }
 
-
-    if (1 == conf->enable
+    if (conf->enable == 1
         || (conf->enable == 2 && enable.len == 2
-        && ngx_strncmp(enable.data, "on", 2) == 0))
+            && ngx_strncmp(enable.data, "on", 2) == 0))
     {
         /* Resolve strength (weak/strong) */
         if (conf->strength == 1) {
@@ -282,6 +277,7 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
         if (!r->headers_out.etag) {
             ngx_md5_init(&md5);
+
             for (chain_link = in; chain_link; chain_link = chain_link->next) {
                 ngx_buf_t *b = chain_link->buf;
 
@@ -296,10 +292,10 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 if (b->in_file && b->file && b->file_last > b->file_pos) {
                     off_t offset = b->file_pos;
                     const off_t end = b->file_last;
-                    /* read in chunks to avoid large allocations */
                     size_t chunk;
                     u_char *tmp;
-                    /* allocate reusable buffer in ctx once */
+
+                    /* Allocate reusable buffer in ctx once */
                     if (ctx->file_buf == NULL) {
                         ctx->file_buf_size = 8192;
                         ctx->file_buf = ngx_palloc(r->pool, ctx->file_buf_size);
@@ -311,7 +307,9 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                     chunk = ctx->file_buf_size;
 
                     while (offset < end) {
-                        size_t to_read = (size_t) ((end - offset) > (off_t) chunk ? chunk : (size_t) (end - offset));
+                        size_t to_read = (size_t) ((end - offset) > (off_t) chunk 
+                            ? chunk : (size_t) (end - offset));
+
                         ssize_t n = ngx_read_file(b->file, tmp, to_read, offset);
                         if (n == NGX_ERROR) {
                             return NGX_ERROR;
@@ -325,29 +323,32 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                     }
                 }
             }
+
             if (hashed_bytes == 0) {
                 /* Avoid emitting ETag for empty content */
                 goto done;
             }
+
             ngx_md5_final(digest, &md5);
 
             size_t etag_len = weak ? 36 : 34;
-            unsigned char * etag = ngx_pcalloc(r->pool, etag_len);
+            unsigned char *etag = ngx_pcalloc(r->pool, etag_len);
             if (etag == NULL) {
                 return NGX_ERROR;
             }
+
             if (weak) {
                 etag[0] = 'W';
                 etag[1] = '/';
                 etag[2] = '"';
                 etag[35] = '"';
-                for ( i = 0 ; i < 16; i++ ) {
+                for (i = 0; i < 16; i++) {
                     etag[2 * i + 3] = hex[digest[i] >> 4];
                     etag[2 * i + 4] = hex[digest[i] & 0xf];
                 }
             } else {
                 etag[0] = etag[33] = '"';
-                for ( i = 0 ; i < 16; i++ ) {
+                for (i = 0; i < 16; i++) {
                     etag[2 * i + 1] = hex[digest[i] >> 4];
                     etag[2 * i + 2] = hex[digest[i] & 0xf];
                 }
@@ -364,7 +365,6 @@ ngx_http_dynamic_etag_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             r->headers_out.etag->value.data = etag;
         }
     }
-
 
 done:
     rc = ngx_http_next_header_filter(r);

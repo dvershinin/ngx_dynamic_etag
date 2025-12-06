@@ -8,43 +8,50 @@ This NGINX module empowers your dynamic content with automatic [`ETag`](https://
 header. It allows client browsers to issue conditional `GET` requests to 
 dynamic pages. And thus saves bandwidth and ensures better performance! 
 
-## Caveats first!
+## Production Usage
 
-This module is a real hack: it calls a header filter from a body filter, etc. It works, but in its current form, *not* production-ready.
+This module is suitable for production with the following considerations:
 
-See "Technical Limitations" at the bottom of this page.
+### Important: Configure Adequate Proxy Buffers
 
-Note that the `HEAD` requests will not have any `ETag` returned, because we have no data to play with, 
-since NGINX rightfully discards body for this request method.
+For correct ETags, ensure your `proxy_buffers` are large enough to hold typical responses:
 
-Consider this as a feature or a bug :-) If we remove this, then all `HEAD` requests end up having same `ETag` (hash on emptiness),
-which is definitely worse.
+```nginx
+# Recommended: Buffer up to 256KB responses
+proxy_buffer_size 64k;
+proxy_buffers 4 64k;
+proxy_busy_buffers_size 128k;
+```
 
-Thus, be sure you check headers like this:
+If responses exceed buffer capacity, only the first chunk is hashed, which may cause
+ETag collisions for files with identical prefixes. See [Technical Limitations](#technical-limitations).
+
+### Things to Know
+
+**HEAD requests**: No `ETag` is returned for HEAD requests since there's no body to hash.
+This is intentional—otherwise all HEAD requests would get identical ETags.
+
+When testing, use:
 
 ```bash
 curl -IL -X GET https://www.example.com/
 ```
-    
- And not like this:
 
- ```bash
-curl -IL https://www.example.com/
-```
-     
-Another worthy thing to mention is that it makes little to no sense applying dynamic `ETag` on a page that changes on 
-each reload. E.g. I found I wasn't using the dynamic `ETag` with benefits, because of `<?= antispambot(get_option('admin_email')) ?>`,
-in my WordPress theme's `header.php`, since in this function:
-
-> the selection is random and changes each time the function is called 
-
-To quickly check if your page is changing on reload, use:
+Not:
 
 ```bash
-diff <(curl http://www.example.com") <(curl http://www.example.com")
+curl -IL https://www.example.com/
 ```
 
-Now that we're done with the "now you know" yada-yada, you can proceed with trying out this stuff :)    
+**Dynamic content**: This module works best when content is deterministic. If your page
+changes on every reload (e.g., random tokens, timestamps), the ETag will change too,
+defeating the caching benefit.
+
+To check if your page content is stable:
+
+```bash
+diff <(curl -s http://www.example.com/) <(curl -s http://www.example.com/)
+```    
 
 
 ## Synopsis
@@ -169,30 +176,52 @@ server {
 ```        
 
 
-## Technical Limitations (Code Review 2025)
+## Technical Limitations
 
-A review of the source code (v1.26.x era) reveals significant design flaws that make this module unsuitable for production in its current state:
+These are known limitations to be aware of when using this module in production.
 
-1.  **Broken ETag for Streamed Responses**:
-    The module initializes a new MD5 context for every chunk of the response body (`ngx_http_dynamic_etag_body_filter`). It hashes only the first chunk, generates an ETag, and sends headers. Subsequent chunks are ignored for hashing purposes. This means:
-    -   Large responses (spanning multiple buffers) get an ETag based solely on the first buffer.
-    -   Files differing only after the first buffer will receive identical ETags (collisions).
+### Buffer Size and ETag Accuracy
 
-2.  **Blocking I/O in Event Loop**:
-    The code explicitly calls `ngx_read_file` (synchronous/blocking read) inside the body filter loop when handling file-backed buffers. This blocks the entire Nginx worker process during disk I/O, defeating Nginx's non-blocking architecture and potentially causing severe performance degradation under load.
+The module hashes content that arrives in the **first** body filter call:
 
-3.  **Protocol & State Violations**:
-    -   **Header Injection Timing**: The module attempts to hold back headers by returning `NGX_OK` in the header filter, then calls `ngx_http_next_header_filter` from within the *body filter*. This is architecturally incorrect and dangerous, as it violates the separation of header and body phases.
-    -   **Multiple Header Sends**: For multi-chunk responses, the body filter code logic risks calling the next header filter multiple times.
+| Scenario | Result |
+|----------|--------|
+| Response fits in `proxy_buffers` | ✅ Correct ETag (full content hashed) |
+| Response exceeds `proxy_buffers` | ⚠️ Partial ETag (only first chunk hashed) |
+| `proxy_buffering off` | ⚠️ Partial ETag (only first chunk hashed) |
 
-4.  **Memory Inefficiency**:
-    It sets `r->main_filter_need_in_memory = 1`, forcing Nginx to read potentially large responses into memory, increasing RAM usage significantly for serving files.
+**For correct ETags**, configure buffers larger than your typical responses:
 
-## TODO
+```nginx
+# Buffer responses up to 256KB
+proxy_buffer_size 64k;
+proxy_buffers 4 64k;
+proxy_busy_buffers_size 128k;
+```
 
-To fix these issues, a complete rewrite of the filter logic is required:
+### What Partial Hashing Means (Important!)
 
--   [ ] **Implement Context-Aware Hashing**: Create a request module context to store the MD5 state (`ngx_md5_t`) across multiple body filter calls. Initialize on the first call, update on subsequent calls, and finalize only when `last_buf` or `last_in_chain` is seen.
--   [ ] **Full Body Buffering**: Since ETag requires the *entire* content to be known before sending the header, the module must intercept and buffer the entire response body (similar to how the `upstream` module works or using a temporary file) before calculating the final hash and sending headers. *Note: This negate the benefits of streaming.*
--   [ ] **Remove Blocking I/O**: Rely on Nginx's internal buffer handling or asynchronous file operations instead of direct `ngx_read_file`.
--   [ ] **Fix Header Filter Logic**: Restore standard header filter behavior. If buffering is implemented, headers will naturally be delayed until the buffer is ready.
+When only a partial ETag is generated, **clients may receive stale content**:
+
+1. Client requests `/page` → receives content with ETag based on first chunk
+2. Content changes, but only **after** the first chunk (e.g., footer update)
+3. Client sends `If-None-Match` with the old ETag
+4. Server sees the first chunk is unchanged → returns `304 Not Modified`
+5. **Client displays stale content** because it trusts the 304 response
+
+This is why adequate buffer sizing is critical. If you cannot guarantee buffers
+are large enough for all responses, consider:
+
+- Disabling dynamic ETags for large/variable responses
+- Using weak ETags (`dynamic_etag_strength weak`) to signal semantic equivalence only
+
+### Other Considerations
+
+1. **Memory Usage**: The module loads response content into memory to compute the MD5 hash.
+   For very large responses, ensure adequate RAM.
+
+2. **File-Backed Buffers**: Synchronous file reads are used for file-backed buffers,
+   which may briefly block the worker process during disk I/O.
+
+3. **Header Timing**: Headers are delayed until the body filter runs to calculate the ETag.
+   This is architecturally unusual but necessary for the module to function.

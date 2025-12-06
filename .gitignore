@@ -4,3 +4,9 @@
 /t/_cache*
 cmake-build-*/
 nginx-*
+CMakeLists.txt
+.cursor/
+Mac-Testing.md
+Makefile
+/docs/
+test-error.log
